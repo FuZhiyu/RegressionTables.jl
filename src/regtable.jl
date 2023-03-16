@@ -101,7 +101,9 @@ function regtable(rr::Union{FixedEffectModel,TableRegressionModel,RegressionMode
     out_buffer = IOBuffer(),
     transform_labels::Union{Dict,Function,Symbol} = identity,
     renderSettings::RenderSettings = asciiOutput(),
-    print_result = true)
+    print_result = true,
+    vcovs = nothing
+    )
     
     _transform_labels = transform_labels isa Function ? transform_labels : _escape(transform_labels)
       
@@ -138,6 +140,12 @@ function regtable(rr::Union{FixedEffectModel,TableRegressionModel,RegressionMode
     vcov(r::TableRegressionModel) = StatsModels.vcov(r)
     coef(r::RegressionModel) = StatsBase.coef(r)
     vcov(r::RegressionModel) = StatsBase.vcov(r)
+    if isnothing(vcovs)
+        vcovs = [vcov for i in 1:size(rr, 1)]
+    end
+    if !isa(vcovs, Vector)
+        vcovs = [vcovs for i in 1:size(rr, 1)]
+    end
     df_residual(r::FixedEffectModel) = dof_residual(r)
     df_residual(r::TableRegressionModel) = dof_residual(r)
     df_residual(r::RegressionModel) = dof_residual(r)
@@ -191,9 +199,10 @@ function regtable(rr::Union{FixedEffectModel,TableRegressionModel,RegressionMode
     for regressor in regressorList
         estimateLine = fill("", below_statistic == :none ? 1 : 2, numberOfResults+1)
         for resultIndex = 1:numberOfResults
+            vcovr = vcovs[resultIndex]
             thiscnames = coefnames(rr[resultIndex])
             thiscoef = coef(rr[resultIndex])
-            thisvcov = vcov(rr[resultIndex])
+            thisvcov = vcovr(rr[resultIndex])
             if standardize_coef && isa(rr[resultIndex],StatsModels.TableRegressionModel)
                 thiscoef = [ thiscoef[i]*std(rr[resultIndex].model.pp.X[:,i])/std(rr[resultIndex].model.rr.y) for i in 1:length(thiscoef) ]
                 mul = [ std(rr[resultIndex].model.pp.X[:,i])*std(rr[resultIndex].model.pp.X[:,j])/(std(rr[resultIndex].model.rr.y)*std(rr[resultIndex].model.rr.y)) for i in 1:length(thiscoef), j in 1:length(thiscoef)  ]
